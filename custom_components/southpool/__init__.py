@@ -1,8 +1,8 @@
 """
-Custom integration to integrate southpool_hacs with Home Assistant.
+Custom integration to integrate Southpool with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/mysteriouswolf/southpool_hacs
+https://github.com/mysteriouswolf/southpool-hacs
 """
 
 from __future__ import annotations

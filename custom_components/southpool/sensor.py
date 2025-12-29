@@ -1,4 +1,4 @@
-"""Sensor platform for southpool_hacs."""
+"""Sensor platform for Southpool."""
 
 from __future__ import annotations
 

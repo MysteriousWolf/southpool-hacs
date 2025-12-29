@@ -9,4 +9,4 @@ homeassistant:
 logger:
     default: info
     logs:
-        custom_components.southpool_hacs: debug
+        custom_components.southpool: debug

@@ -1,10 +1,10 @@
-"""Constants for southpool_hacs."""
+"""Constants for southpool."""
 
 from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
 
-DOMAIN = "southpool_hacs"
+DOMAIN = "southpool"
 ATTRIBUTION = "Data provided by Southpool (labs.hupx.hu)"
 CONF_REGION = "region"
 

@@ -1,5 +1,5 @@
 {
-  "name": "Southpool HACS Integration",
-  "homeassistant": "2025.2.4",
-  "hacs": "2.0.5"
+    "name": "Southpool Energy Excange Integration",
+    "homeassistant": "2025.2.4",
+    "hacs": "2.0.5"
 }

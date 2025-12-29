@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for southpool_hacs with efficient data fetching."""
+"""DataUpdateCoordinator for Southpool with efficient data fetching."""
 
 from __future__ import annotations
 

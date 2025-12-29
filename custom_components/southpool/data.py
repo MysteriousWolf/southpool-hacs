@@ -1,4 +1,4 @@
-"""Custom types for southpool_hacs."""
+"""Custom types for Southpool."""
 
 from __future__ import annotations
 

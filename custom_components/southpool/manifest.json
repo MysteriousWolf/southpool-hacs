@@ -1,6 +1,6 @@
 {
-    "domain": "southpool_hacs",
-    "name": "Southpool HACS Integration",
+    "domain": "southpool",
+    "name": "Southpool Integration",
     "codeowners": ["@MysteriousWolf"],
     "config_flow": true,
     "documentation": "https://github.com/MysteriousWolf/southpool_hacs",
