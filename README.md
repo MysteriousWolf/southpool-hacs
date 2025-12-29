@@ -1,46 +1,125 @@
-# Notice
+# Southpool Integration for Home Assistant
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+A Home Assistant custom integration that provides real-time electricity market data from the Southpool energy exchange. Monitor current and forecasted electricity prices for Hungary, Serbia, and Slovenia power markets.
 
-HAVE FUN! 😎
+[![HACS Custom][hacs_shield]][hacs]
+[![GitHub Release][releases-shield]][releases]
+[![GitHub Activity][commits-shield]][commits]
 
-## Why?
+## Features
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+- **Real-time Price Monitoring**: Track current electricity prices in EUR/MWh
+- **48-Hour Forecast**: Get today's and tomorrow's price data
+- **Multi-Region Support**: Support for Hungary (HU), Serbia (RS), and Slovenia (SI)
+- **15-Minute Intervals**: Detailed quarter-hour price breakdowns
+- **Trading Volume Data**: Monitor traded volumes alongside prices
+- **Automated Updates**: Data refreshes every 15 minutes
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+## Installation
 
-## What?
+### HACS (Recommended)
 
-This repository contains multiple files, here is a overview:
+This integration is available in HACS (Home Assistant Community Store).
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/southpool_hacs/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+1. Open HACS in your Home Assistant instance
+2. Go to "Integrations"
+3. Click the three dots in the top right corner
+4. Select "Custom repositories"
+5. Add this repository URL: `https://github.com/MysteriousWolf/southpool-hacs`
+6. Select category: "Integration"
+7. Click "ADD"
+8. Find "Southpool Energy Exchange Integration" and click "Download"
+9. Restart Home Assistant
 
-## How?
+### Manual Installation
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `southpool_hacs` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+1. Copy the `custom_components/southpool` directory to your Home Assistant `custom_components` directory
+2. Restart Home Assistant
+3. Add the integration through the UI
 
-## Next steps
+## Configuration
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon) to https://github.com/home-assistant/brands.
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+1. Go to **Settings** > **Devices & Services**
+2. Click **Add Integration**
+3. Search for "Southpool"
+4. Select your region:
+   - **Hungary (HU)**
+   - **Serbia (RS)**  
+   - **Slovenia (SI)**
+5. Click **Submit**
+
+## Sensors
+
+The integration provides the following sensors for your selected region:
+
+| Sensor | Description | Unit |
+|--------|-------------|------|
+| `sensor.southpool_timestamp` | Current data timestamp | - |
+| `sensor.southpool_quarter_hour` | Current quarter-hour period | - |
+| `sensor.southpool_price` | Current electricity price | EUR/MWh |
+| `sensor.southpool_traded_volume` | Current traded volume | MW |
+
+## Usage Examples
+
+### Energy Dashboard
+
+Add the price sensor to your Energy Dashboard to track electricity costs over time.
+
+### Automation Example
+
+Create automations based on electricity prices:
+
+```yaml
+automation:
+  - alias: "High Electricity Price Alert"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.southpool_price
+        above: 100
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Electricity price is high: {{ states('sensor.southpool_price') }} EUR/MWh"
+```
+
+## Data Source
+
+This integration fetches data from the [Hungarian Power Exchange (HUPX) Labs API](https://labs.hupx.hu/), which provides official Southpool market data for the supported regions.
+
+## Troubleshooting
+
+### No Data Available
+
+- Check your internet connection
+- Verify the selected region is correct
+- Check the Home Assistant logs for API errors
+
+### Outdated Data
+
+- The integration updates every 15 minutes
+- Market data may have delays during maintenance periods
+- Check the timestamp sensor to see when data was last updated
+
+## Support
+
+- [Report Issues](https://github.com/MysteriousWolf/southpool-hacs/issues)
+- [Feature Requests](https://github.com/MysteriousWolf/southpool-hacs/discussions)
+
+## Contributing
+
+Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTING.md) before submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+*This integration is not affiliated with Southpool or HUPX. All data is provided by their public APIs.*
+
+[hacs]: https://hacs.xyz
+[hacs_shield]: https://img.shields.io/badge/HACS-Custom-blue.svg
+[releases-shield]: https://img.shields.io/github/release/MysteriousWolf/southpool-hacs.svg
+[releases]: https://github.com/MysteriousWolf/southpool-hacs/releases
+[commits-shield]: https://img.shields.io/github/commit-activity/y/MysteriousWolf/southpool-hacs.svg
+[commits]: https://github.com/MysteriousWolf/southpool-hacs/commits/main
