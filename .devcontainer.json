@@ -1,10 +1,9 @@
 {
-    "name": "ludeeus/integration_blueprint",
+    "name": "mysteriouswolf/southpool_hacs",
     "image": "mcr.microsoft.com/devcontainers/python:3.13",
     "postCreateCommand": "scripts/setup",
-    "forwardPorts": [
-        8123
-    ],
+    "runArgs": ["-p", "8123:8123"],
+    "forwardPorts": [8123],
     "portsAttributes": {
         "8123": {
             "label": "Home Assistant",

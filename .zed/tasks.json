@@ -1,0 +1,29 @@
+[
+    {
+        "label": "Setup",
+        "command": "./scripts/setup",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "reveal": "always",
+        "hide": "on_success",
+        "tags": ["setup"]
+    },
+    {
+        "label": "Lint",
+        "command": "./scripts/lint",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": false,
+        "reveal": "always",
+        "hide": "on_success",
+        "tags": ["lint"]
+    },
+    {
+        "label": "Develop",
+        "command": "./scripts/develop",
+        "use_new_terminal": true,
+        "allow_concurrent_runs": false,
+        "reveal": "always",
+        "hide": "never",
+        "tags": ["dev"]
+    }
+]

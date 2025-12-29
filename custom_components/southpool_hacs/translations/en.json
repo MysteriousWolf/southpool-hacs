@@ -1,0 +1,22 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Southpool",
+                "data": {
+                    "region": "Region"
+                }
+            }
+        },
+        "abort": {
+            "already_configured": "Region already configured"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Southpool Options"
+            }
+        }
+    }
+}
