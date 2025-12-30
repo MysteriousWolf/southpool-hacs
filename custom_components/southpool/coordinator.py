@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.core import HomeAssistant
 
 from .api import (
     SouthpoolApiClientAuthenticationError,
     SouthpoolApiClientError,
 )
+from .const import CET_TZ
 
 if TYPE_CHECKING:
+    import logging
+
+    from homeassistant.core import HomeAssistant
+
     from .data import SouthpoolConfigEntry
 
 
@@ -27,17 +32,19 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
-        logger,
+        logger: logging.Logger,
         name: str,
-        update_interval: timedelta,
+        *,
+        update_interval: timedelta | None = None,  # noqa: ARG002
     ) -> None:
         """Initialize the coordinator."""
-        # Set update interval to 15 minutes for sensor updates
-        super().__init__(hass, logger, name=name, update_interval=timedelta(minutes=15))
+        # Disable built-in updates - we use custom scheduling
+        super().__init__(hass, logger, name=name, update_interval=None)
         self._quarter_hour_task = None
         self._api_fetch_task = None
         self._cached_api_data = None
         self._last_api_fetch = None
+        self._update_lock = asyncio.Lock()
 
     async def _async_update_data(self) -> Any:
         """Update current values from cached data without API call."""
@@ -50,7 +57,7 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
                 "records": [],
                 "current_values": {},
                 "forecast_48h": {},
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(CET_TZ).isoformat(),
                 "last_api_fetch": None,
             }
 
@@ -71,12 +78,83 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
             self.logger.debug("Fetching fresh data from Southpool API")
             data = await self.config_entry.runtime_data.client.async_get_data()
             self._cached_api_data = data
-            self._last_api_fetch = datetime.now()
-            return data
+            self._last_api_fetch = datetime.now(CET_TZ)
         except SouthpoolApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
         except SouthpoolApiClientError as exception:
             raise UpdateFailed(exception) from exception
+        else:
+            return data
+
+    def _find_current_record(
+        self, sorted_rows: list[dict[str, Any]], today_str: str, current_quarter: int
+    ) -> dict[str, Any] | None:
+        """Find current record for today's quarter hour."""
+        for row in sorted_rows:
+            row_date = row.get("Delivery day", "")[:10]  # Extract date part
+            row_quarter = int(row.get("Quarter hour", 0))
+
+            if row_date == today_str and row_quarter == current_quarter:
+                self.logger.debug(
+                    "Found exact match for quarter hour %s", current_quarter
+                )
+                return row
+        return None
+
+    def _get_fallback_record(
+        self, sorted_rows: list[dict[str, Any]], today_str: str
+    ) -> dict[str, Any] | None:
+        """Get latest record for today if no exact match found."""
+        today_records = [
+            r for r in sorted_rows if r.get("Delivery day", "")[:10] == today_str
+        ]
+        if today_records:
+            record = today_records[-1]
+            self.logger.debug(
+                "No exact match found, using latest record for today: quarter hour %s",
+                record.get("Quarter hour", "Unknown"),
+            )
+            return record
+        return None
+
+    def _calculate_timestamp(self, delivery_day: str, quarter_hour: str) -> str:
+        """Calculate timestamp from delivery day and quarter hour."""
+        if not delivery_day or not quarter_hour:
+            return ""
+        try:
+            base_date = datetime.fromisoformat(delivery_day[:10]).replace(tzinfo=CET_TZ)
+            minutes_offset = (int(quarter_hour) - 1) * 15
+            return (base_date + timedelta(minutes=minutes_offset)).isoformat()
+        except (ValueError, TypeError):
+            return ""
+
+    def _build_forecast_data(
+        self, sorted_rows: list[dict[str, Any]], current_record: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Build 48-hour forecast data."""
+        current_index = (
+            sorted_rows.index(current_record) if current_record in sorted_rows else 0
+        )
+        next_48h_records = sorted_rows[
+            current_index : current_index + 192
+        ]  # 48 hours * 4 quarters = 192
+
+        timestamp_list = []
+        for r in next_48h_records:
+            timestamp = self._calculate_timestamp(
+                r.get("Delivery day", ""), r.get("Quarter hour", "")
+            )
+            timestamp_list.append(timestamp)
+
+        return {
+            "timestamp": timestamp_list,
+            "delivery_day": [r.get("Delivery day", "") for r in next_48h_records],
+            "quarter_hour": [r.get("Quarter hour", "") for r in next_48h_records],
+            "price": [r.get("Price", "") for r in next_48h_records],
+            "traded_volume": [r.get("Traded volume", "") for r in next_48h_records],
+            "baseload_price": [r.get("Baseload price", "") for r in next_48h_records],
+            "status": [r.get("Status", "") for r in next_48h_records],
+        }
 
     def _update_current_values(self, api_data: dict[str, Any]) -> dict[str, Any]:
         """Update current values based on current time without API call."""
@@ -88,57 +166,42 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
             return api_data
 
         # Sort records by delivery day and quarter hour
-        sorted_rows = sorted(records, key=lambda x: (x.get("Delivery day", ""), int(x.get("Quarter hour", 0))))
-
-        # Get current quarter hour (1-96 based on current time)
-        now = datetime.now()
-        current_quarter = ((now.hour * 60 + now.minute) // 15) + 1
-
-        self.logger.debug(
-            "Current time: %s, calculated quarter hour: %s",
-            now.strftime("%Y-%m-%d %H:%M:%S"),
-            current_quarter
+        sorted_rows = sorted(
+            records,
+            key=lambda x: (x.get("Delivery day", ""), int(x.get("Quarter hour", 0))),
         )
 
-        # Find current record (today's current quarter hour)
+        # Get current quarter hour (1-96 based on current time in CET)
+        now = datetime.now(CET_TZ)
+        current_quarter = ((now.hour * 60 + now.minute) // 15) + 1
         today_str = now.strftime("%Y-%m-%d")
-        current_record = None
 
-        for row in sorted_rows:
-            row_date = row.get("Delivery day", "")[:10]  # Extract date part
-            row_quarter = int(row.get("Quarter hour", 0))
+        self.logger.debug(
+            "Current CET time: %s, calculated quarter hour: %s",
+            now.strftime("%Y-%m-%d %H:%M:%S UTC+01:00"),
+            current_quarter,
+        )
 
-            if row_date == today_str and row_quarter == current_quarter:
-                current_record = row
-                self.logger.debug("Found exact match for quarter hour %s", current_quarter)
-                break
-
-        # If no exact current record, use the latest available from today
+        # Find current record
+        current_record = self._find_current_record(
+            sorted_rows, today_str, current_quarter
+        )
         if not current_record:
-            today_records = [r for r in sorted_rows if r.get("Delivery day", "")[:10] == today_str]
-            if today_records:
-                current_record = today_records[-1]
-                self.logger.debug(
-                    "No exact match found, using latest record for today: quarter hour %s",
-                    current_record.get("Quarter hour", "Unknown")
-                )
-            else:
-                current_record = sorted_rows[0] if sorted_rows else {}
-                self.logger.debug("No today records found, using first available record")
+            current_record = self._get_fallback_record(sorted_rows, today_str)
+
+        if not current_record:
+            self.logger.warning("No records found for today")
+            return {
+                **api_data,
+                "current_values": {},
+                "forecast_48h": {},
+                "last_update": datetime.now(CET_TZ).isoformat(),
+            }
 
         # Extract current values
         delivery_day = current_record.get("Delivery day", "")
         quarter_hour = current_record.get("Quarter hour", "")
-
-        # Calculate timestamp from delivery day and quarter hour
-        timestamp = ""
-        if delivery_day and quarter_hour:
-            try:
-                base_date = datetime.fromisoformat(delivery_day.replace('Z', '+00:00'))
-                minutes_offset = (int(quarter_hour) - 1) * 15
-                timestamp = (base_date + timedelta(minutes=minutes_offset)).isoformat()
-            except (ValueError, TypeError):
-                pass
+        timestamp = self._calculate_timestamp(delivery_day, quarter_hour)
 
         current_values = {
             "timestamp": timestamp,
@@ -150,61 +213,40 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
             "status": current_record.get("Status", ""),
         }
 
-        # Build 48-hour forecasts (next 48 hours from current quarter)
-        current_index = sorted_rows.index(current_record) if current_record in sorted_rows else 0
-        next_48h_records = sorted_rows[current_index:current_index + 192]  # 48 hours * 4 quarters = 192
+        # Build 48-hour forecasts
+        forecast_48h = self._build_forecast_data(sorted_rows, current_record)
 
-        # Calculate timestamps for forecast
-        timestamp_list = []
-        for r in next_48h_records:
-            delivery_day = r.get("Delivery day", "")
-            quarter_hour = r.get("Quarter hour", "")
-            if delivery_day and quarter_hour:
-                try:
-                    base_date = datetime.fromisoformat(delivery_day.replace('Z', '+00:00'))
-                    minutes_offset = (int(quarter_hour) - 1) * 15
-                    timestamp = (base_date + timedelta(minutes=minutes_offset)).isoformat()
-                    timestamp_list.append(timestamp)
-                except (ValueError, TypeError):
-                    timestamp_list.append("")
-            else:
-                timestamp_list.append("")
-
-        forecast_48h = {
-            "timestamp": timestamp_list,
-            "delivery_day": [r.get("Delivery day", "") for r in next_48h_records],
-            "quarter_hour": [r.get("Quarter hour", "") for r in next_48h_records],
-            "price": [r.get("Price", "") for r in next_48h_records],
-            "traded_volume": [r.get("Traded volume", "") for r in next_48h_records],
-            "baseload_price": [r.get("Baseload price", "") for r in next_48h_records],
-            "status": [r.get("Status", "") for r in next_48h_records],
-        }
-
-        # Return updated data structure
         return {
             "region": api_data.get("region"),
             "data_count": len(records),
             "records": records,
             "current_values": current_values,
             "forecast_48h": forecast_48h,
-            "last_update": datetime.now().isoformat(),
-            "last_api_fetch": self._last_api_fetch.isoformat() if self._last_api_fetch else None,
+            "last_update": datetime.now(CET_TZ).isoformat(),
+            "last_api_fetch": self._last_api_fetch.isoformat()
+            if self._last_api_fetch
+            else None,
         }
 
     def _calculate_next_quarter_hour(self) -> datetime:
         """Calculate the next quarter hour mark (00, 15, 30, or 45 minutes)."""
-        now = datetime.now()
+        now = datetime.now(CET_TZ)
         current_minute = now.minute
 
         # Find next quarter hour mark
         next_quarter_minute = ((current_minute // 15) + 1) * 15
+        max_minutes = 60
 
-        if next_quarter_minute == 60:
+        if next_quarter_minute == max_minutes:
             # Next hour
-            next_quarter = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            next_quarter = now.replace(minute=0, second=0, microsecond=0) + timedelta(
+                hours=1
+            )
         else:
             # Same hour
-            next_quarter = now.replace(minute=next_quarter_minute, second=0, microsecond=0)
+            next_quarter = now.replace(
+                minute=next_quarter_minute, second=0, microsecond=0
+            )
 
         return next_quarter
 
@@ -214,51 +256,57 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
             return True
 
         # Fetch new data every hour
-        time_since_fetch = datetime.now() - self._last_api_fetch
+        time_since_fetch = datetime.now(CET_TZ) - self._last_api_fetch
         should_fetch = time_since_fetch >= timedelta(hours=1)
 
         self.logger.debug(
             "Time since last API fetch: %s minutes, should fetch: %s",
             round(time_since_fetch.total_seconds() / 60, 1),
-            should_fetch
+            should_fetch,
         )
 
         return should_fetch
 
     async def _schedule_quarter_hour_updates(self) -> None:
-        """Schedule updates to happen exactly on quarter hour marks."""
+        """Schedule updates at quarter hour intervals."""
         self.logger.info("Quarter hour scheduler task started")
         while True:
             try:
                 # Calculate time until next quarter hour
                 next_quarter = self._calculate_next_quarter_hour()
-                now = datetime.now()
+                now = datetime.now(CET_TZ)
                 wait_seconds = (next_quarter - now).total_seconds()
 
                 self.logger.debug(
-                    "Next quarter hour update scheduled for %s (in %s seconds)",
+                    "Next quarter hour update scheduled for %s (in %.1f seconds)",
                     next_quarter.strftime("%H:%M:%S"),
-                    round(wait_seconds, 1)
+                    wait_seconds,
                 )
 
                 # Wait until the next quarter hour
                 await asyncio.sleep(max(0.1, wait_seconds))
 
-                current_time = datetime.now()
-                self.logger.info("Quarter hour update triggered at %s", current_time.strftime("%H:%M:%S"))
-
-                # Trigger sensor update exactly at quarter hour mark (no API calls)
+                current_time = datetime.now(CET_TZ)
+                self.logger.info(
+                    "Quarter hour update triggered at %s",
+                    current_time.strftime("%H:%M:%S"),
+                )
                 try:
-                    await self.async_refresh()
-                    self.logger.info("Sensors refreshed successfully at %s", current_time.strftime("%H:%M:%S"))
-                except Exception as refresh_err:
-                    self.logger.error("Failed to refresh sensors: %s", refresh_err)
+                    # Use lock to prevent race conditions with other updates
+                    async with self._update_lock:
+                        await self.async_request_refresh()
+                    self.logger.info(
+                        "Sensors refreshed successfully at %s",
+                        current_time.strftime("%H:%M:%S"),
+                    )
+                except Exception:
+                    self.logger.exception("Failed to refresh sensors")
 
             except asyncio.CancelledError:
                 self.logger.debug("Quarter hour update task cancelled")
                 break
-            except Exception as err:
-                self.logger.error("Error in quarter hour scheduler: %s", err)
+            except Exception:
+                self.logger.exception("Error in quarter hour scheduler")
                 # Wait a bit before retrying
                 await asyncio.sleep(60)
 
@@ -267,14 +315,16 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
         while True:
             try:
                 # Calculate time until next hour
-                now = datetime.now()
-                next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                now = datetime.now(CET_TZ)
+                next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(
+                    hours=1
+                )
                 wait_seconds = (next_hour - now).total_seconds()
 
                 self.logger.debug(
                     "Next hourly API fetch scheduled for %s (in %s seconds)",
                     next_hour.strftime("%H:%M:%S"),
-                    round(wait_seconds, 1)
+                    round(wait_seconds, 1),
                 )
 
                 # Wait until the next hour
@@ -282,16 +332,21 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch fresh API data independently of sensor updates
                 try:
-                    await self._fetch_api_data()
-                    self.logger.info("Completed hourly API data fetch at %s", datetime.now().strftime("%H:%M:%S"))
-                except Exception as api_err:
-                    self.logger.error("Failed hourly API fetch: %s", api_err)
+                    # Use lock to prevent race conditions with sensor updates
+                    async with self._update_lock:
+                        await self._fetch_api_data()
+                    self.logger.info(
+                        "Completed hourly API data fetch at %s",
+                        datetime.now(CET_TZ).strftime("%H:%M:%S"),
+                    )
+                except Exception:
+                    self.logger.exception("Failed hourly API fetch")
 
             except asyncio.CancelledError:
                 self.logger.debug("Hourly API fetch task cancelled")
                 break
-            except Exception as err:
-                self.logger.error("Error in hourly API fetch scheduler: %s", err)
+            except Exception:
+                self.logger.exception("Error in hourly API fetch scheduler")
                 # Wait a bit before retrying
                 await asyncio.sleep(300)  # 5 minutes
 
@@ -304,8 +359,8 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             await self._fetch_api_data()
             self.logger.info("Initial API data fetch completed successfully")
-        except Exception as err:
-            self.logger.error("Initial API fetch failed: %s", err)
+        except Exception:
+            self.logger.exception("Initial API fetch failed")
 
         # Do initial sensor update with fetched data
         self.logger.info("Performing initial sensor update")
@@ -315,13 +370,17 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
         # Start quarter hour synchronization
         if self._quarter_hour_task is None or self._quarter_hour_task.done():
             self.logger.info("Starting quarter hour synchronization task")
-            self._quarter_hour_task = asyncio.create_task(self._schedule_quarter_hour_updates())
+            self._quarter_hour_task = asyncio.create_task(
+                self._schedule_quarter_hour_updates()
+            )
             self.logger.debug("Quarter hour task created: %s", self._quarter_hour_task)
 
         # Start hourly API fetch scheduling
         if self._api_fetch_task is None or self._api_fetch_task.done():
             self.logger.info("Starting hourly API fetch task")
-            self._api_fetch_task = asyncio.create_task(self._schedule_hourly_api_fetch())
+            self._api_fetch_task = asyncio.create_task(
+                self._schedule_hourly_api_fetch()
+            )
             self.logger.debug("API fetch task created: %s", self._api_fetch_task)
 
         self.logger.info("Coordinator initialization completed successfully")
@@ -346,7 +405,5 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
 
         for task in tasks_to_cancel:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass

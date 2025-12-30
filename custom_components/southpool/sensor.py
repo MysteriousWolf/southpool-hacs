@@ -6,13 +6,14 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorDeviceClass,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy, UnitOfPower, CURRENCY_EURO
+from homeassistant.const import UnitOfPower
 
+from .const import CET_TZ
 from .entity import SouthpoolEntity
 
 if TYPE_CHECKING:
@@ -105,40 +106,60 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
         current_values = self.coordinator.data.get("current_values", {})
 
         if self.entity_description.key == "timestamp":
-            # Calculate timestamp from delivery day and quarter hour
-            delivery_day = current_values.get("delivery_day", "")
-            quarter_hour = current_values.get("quarter_hour", "")
+            return self._get_timestamp_value(current_values)
 
-            if delivery_day and quarter_hour:
-                try:
-                    # Parse delivery day
-                    base_date = datetime.fromisoformat(delivery_day.replace('Z', '+00:00'))
-                    # Calculate minutes from quarter hour (1-based, 15-minute intervals)
-                    minutes_offset = (int(quarter_hour) - 1) * 15
-                    # Add offset to get the timestamp
-                    timestamp = base_date + timedelta(minutes=minutes_offset)
-                    return timestamp
-                except (ValueError, TypeError):
-                    return None
+        return self._get_regular_value(current_values)
+
+    def _get_timestamp_value(self, current_values: dict) -> datetime | None:
+        """Get timestamp value from delivery day and quarter hour."""
+        delivery_day = current_values.get("delivery_day", "")
+        quarter_hour = current_values.get("quarter_hour", "")
+
+        if not delivery_day or not quarter_hour:
             return None
-        elif self.entity_description.key in current_values:
-            value = current_values[self.entity_description.key]
 
-            # Convert numeric values for appropriate sensors
-            if self.entity_description.key in ["quarter_hour"] and value:
-                try:
-                    return int(value)
-                except (ValueError, TypeError):
-                    return None
-            elif self.entity_description.key in ["price", "traded_volume", "baseload_price"] and value:
-                try:
-                    return float(value)
-                except (ValueError, TypeError):
-                    return None
-            else:
-                return value if value else None
+        try:
+            # Parse delivery day as CET (always assume CET format)
+            base_date = datetime.fromisoformat(delivery_day[:10]).replace(tzinfo=CET_TZ)
+            # Calculate minutes from quarter hour (1-based, 15-minute intervals)
+            minutes_offset = (int(quarter_hour) - 1) * 15
+            return base_date + timedelta(minutes=minutes_offset)
+        except (ValueError, TypeError):
+            return None
 
-        return None
+    def _get_regular_value(self, current_values: dict) -> str | int | float | None:
+        """Get regular value with appropriate type conversion."""
+        if self.entity_description.key not in current_values:
+            return None
+
+        value = current_values[self.entity_description.key]
+        if not value:
+            return None
+
+        # Convert numeric values for appropriate sensors
+        if self.entity_description.key == "quarter_hour":
+            return self._convert_to_int(value)
+        if self.entity_description.key in [
+            "price",
+            "traded_volume",
+            "baseload_price",
+        ]:
+            return self._convert_to_float(value)
+        return value
+
+    def _convert_to_int(self, value: str) -> int | None:
+        """Convert value to int, return None on error."""
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+
+    def _convert_to_float(self, value: str) -> float | None:
+        """Convert value to float, return None on error."""
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
 
     @property
     def extra_state_attributes(self) -> dict[str, any]:
@@ -160,15 +181,20 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
             quarter_hours = forecast_data.get("quarter_hour", [])
 
             timestamp_list = []
-            for delivery_day, quarter_hour in zip(delivery_days, quarter_hours):
+            for delivery_day, quarter_hour in zip(
+                delivery_days, quarter_hours, strict=False
+            ):
                 if delivery_day and quarter_hour:
                     try:
-                        base_date = datetime.fromisoformat(delivery_day.replace('Z', '+00:00'))
+                        # Parse delivery day as CET (always assume CET format)
+                        base_date = datetime.fromisoformat(delivery_day[:10]).replace(
+                            tzinfo=CET_TZ
+                        )
                         minutes_offset = (int(quarter_hour) - 1) * 15
                         timestamp = base_date + timedelta(minutes=minutes_offset)
                         timestamp_list.append(timestamp.isoformat())
                     except (ValueError, TypeError):
-                        timestamp_list.append(None)
+                        timestamp_list.append("")
                 else:
                     timestamp_list.append(None)
 
@@ -179,8 +205,14 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
 
             # Convert values to appropriate types if needed
             if self.entity_description.key == "quarter_hour":
-                forecast_list = [int(v) if v and str(v).isdigit() else v for v in forecast_list]
-            elif self.entity_description.key in ["price", "traded_volume", "baseload_price"]:
+                forecast_list = [
+                    int(v) if v and str(v).isdigit() else v for v in forecast_list
+                ]
+            elif self.entity_description.key in [
+                "price",
+                "traded_volume",
+                "baseload_price",
+            ]:
                 converted_list = []
                 for v in forecast_list:
                     try:
@@ -197,4 +229,6 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
+        return (
+            self.coordinator.last_update_success and self.coordinator.data is not None
+        )

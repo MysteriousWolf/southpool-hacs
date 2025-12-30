@@ -11,6 +11,8 @@ from typing import Any
 import aiohttp
 import async_timeout
 
+from .const import CET_TZ
+
 
 class SouthpoolApiClientError(Exception):
     """Exception to indicate a general API error."""
@@ -47,15 +49,23 @@ class SouthpoolApiClient:
         """Initialize the API Client."""
         self._region = region
         self._session = session
-        self._base_url = "https://labs.hupx.hu/csv/v1/dam_aggregated_trading_data_15min/csv"
+        self._base_url = (
+            "https://labs.hupx.hu/csv/v1/dam_aggregated_trading_data_15min/csv"
+        )
 
     async def async_get_data(self) -> dict[str, Any]:
         """Get 48 hours of trading data for the configured region (today + tomorrow)."""
-        today = datetime.now().strftime("%Y-%m-%d")
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        # Use CET timezone for date calculations since API data is in CET
+        now_cet = datetime.now(CET_TZ)
+        today = now_cet.strftime("%Y-%m-%d")
+        tomorrow = (now_cet + timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Build the filter parameter for 48 hours
-        filter_param = f"DeliveryDay__gte__{today},DeliveryDay__lte__{tomorrow},Region__in__{self._region}"
+        filter_param = (
+            f"DeliveryDay__gte__{today},"
+            f"DeliveryDay__lte__{tomorrow},"
+            f"Region__in__{self._region}"
+        )
 
         url = f"{self._base_url}?filter={filter_param}"
 
@@ -66,7 +76,11 @@ class SouthpoolApiClient:
 
     async def async_get_data_for_date(self, date: str) -> dict[str, Any]:
         """Get trading data for a specific date."""
-        filter_param = f"DeliveryDay__gte__{date},DeliveryDay__lte__{date},Region__in__{self._region}"
+        filter_param = (
+            f"DeliveryDay__gte__{date},"
+            f"DeliveryDay__lte__{date},"
+            f"Region__in__{self._region}"
+        )
         url = f"{self._base_url}?filter={filter_param}"
 
         return await self._api_wrapper(
@@ -116,14 +130,13 @@ class SouthpoolApiClient:
             rows = list(csv_reader)
 
             # Build response with raw data only
-            result = {
+            # Use CET timezone for consistency with API data
+            return {
                 "region": self._region,
                 "data_count": len(rows),
                 "records": rows,
-                "api_fetch_time": datetime.now().isoformat(),
+                "api_fetch_time": datetime.now(CET_TZ).isoformat(),
             }
-
-            return result
 
         except Exception as exception:
             msg = f"Error parsing CSV data: {exception}"

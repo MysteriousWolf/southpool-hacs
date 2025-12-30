@@ -26,8 +26,12 @@ class SouthpoolConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get the region name for the title
             region_name = next(
-                (region["label"] for region in REGIONS if region["value"] == user_input[CONF_REGION]),
-                user_input[CONF_REGION]
+                (
+                    region["label"]
+                    for region in REGIONS
+                    if region["value"] == user_input[CONF_REGION]
+                ),
+                user_input[CONF_REGION],
             )
 
             return self.async_create_entry(

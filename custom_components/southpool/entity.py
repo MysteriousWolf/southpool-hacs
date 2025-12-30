@@ -22,8 +22,7 @@ class SouthpoolEntity(CoordinatorEntity[SouthpoolDataUpdateCoordinator]):
         # Get region info for device naming
         region = coordinator.config_entry.data.get(CONF_REGION, "Unknown")
         region_name = next(
-            (r["label"] for r in REGIONS if r["value"] == region),
-            region
+            (r["label"] for r in REGIONS if r["value"] == region), region
         )
 
         self._attr_device_info = DeviceInfo(

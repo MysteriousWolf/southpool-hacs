@@ -15,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import SouthpoolApiClient
-from .const import DOMAIN, LOGGER, CONF_REGION
+from .const import CONF_REGION, DOMAIN, LOGGER
 from .coordinator import SouthpoolDataUpdateCoordinator
 from .data import SouthpoolData
 
