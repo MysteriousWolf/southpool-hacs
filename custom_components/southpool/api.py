@@ -11,7 +11,7 @@ from typing import Any
 import aiohttp
 import async_timeout
 
-from .const import CET_TZ
+from .const import API_ENDPOINT_15MIN, API_ENDPOINT_HOURLY, CET_TZ
 
 
 class SouthpoolApiClientError(Exception):
@@ -49,9 +49,8 @@ class SouthpoolApiClient:
         """Initialize the API Client."""
         self._region = region
         self._session = session
-        self._base_url = (
-            "https://labs.hupx.hu/csv/v1/dam_aggregated_trading_data_15min/csv"
-        )
+        self._base_url_15min = API_ENDPOINT_15MIN
+        self._base_url_hourly = API_ENDPOINT_HOURLY
 
     async def async_get_data(self) -> dict[str, Any]:
         """Get 48 hours of trading data for the configured region (today + tomorrow)."""
@@ -67,12 +66,20 @@ class SouthpoolApiClient:
             f"Region__in__{self._region}"
         )
 
-        url = f"{self._base_url}?filter={filter_param}"
+        # Fetch both 15-minute and hourly data
+        url_15min = f"{self._base_url_15min}?filter={filter_param}"
+        url_hourly = f"{self._base_url_hourly}?filter={filter_param}"
 
-        return await self._api_wrapper(
-            method="get",
-            url=url,
-        )
+        data_15min = await self._api_wrapper("get", url_15min)
+        data_hourly = await self._api_wrapper("get", url_hourly)
+
+        # Combine both datasets
+        return {
+            "region": self._region,
+            "data_15min": data_15min,
+            "data_hourly": data_hourly,
+            "api_fetch_time": datetime.now(CET_TZ).isoformat(),
+        }
 
     async def async_get_data_for_date(self, date: str) -> dict[str, Any]:
         """Get trading data for a specific date."""
@@ -81,12 +88,21 @@ class SouthpoolApiClient:
             f"DeliveryDay__lte__{date},"
             f"Region__in__{self._region}"
         )
-        url = f"{self._base_url}?filter={filter_param}"
 
-        return await self._api_wrapper(
-            method="get",
-            url=url,
-        )
+        # Fetch both 15-minute and hourly data
+        url_15min = f"{self._base_url_15min}?filter={filter_param}"
+        url_hourly = f"{self._base_url_hourly}?filter={filter_param}"
+
+        data_15min = await self._api_wrapper("get", url_15min)
+        data_hourly = await self._api_wrapper("get", url_hourly)
+
+        # Combine both datasets
+        return {
+            "region": self._region,
+            "data_15min": data_15min,
+            "data_hourly": data_hourly,
+            "api_fetch_time": datetime.now(CET_TZ).isoformat(),
+        }
 
     async def _api_wrapper(
         self,
@@ -132,10 +148,8 @@ class SouthpoolApiClient:
             # Build response with raw data only
             # Use CET timezone for consistency with API data
             return {
-                "region": self._region,
                 "data_count": len(rows),
                 "records": rows,
-                "api_fetch_time": datetime.now(CET_TZ).isoformat(),
             }
 
         except Exception as exception:

@@ -15,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import SouthpoolApiClient
-from .const import CONF_REGION, DOMAIN, LOGGER
+from .const import CONF_REGION, DOMAIN, LOGGER, UPDATE_INTERVAL_MINUTES
 from .coordinator import SouthpoolDataUpdateCoordinator
 from .data import SouthpoolData
 
@@ -35,17 +35,19 @@ async def async_setup_entry(
     entry: SouthpoolConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
+    api_client = SouthpoolApiClient(
+        region=entry.data[CONF_REGION],
+        session=async_get_clientsession(hass),
+    )
     coordinator = SouthpoolDataUpdateCoordinator(
         hass=hass,
         logger=LOGGER,
         name=DOMAIN,
-        update_interval=timedelta(minutes=15),
+        update_interval=timedelta(minutes=UPDATE_INTERVAL_MINUTES),
+        api_client=api_client,
     )
     entry.runtime_data = SouthpoolData(
-        client=SouthpoolApiClient(
-            region=entry.data[CONF_REGION],
-            session=async_get_clientsession(hass),
-        ),
+        client=api_client,
         integration=async_get_loaded_integration(hass, entry.domain),
         coordinator=coordinator,
     )
