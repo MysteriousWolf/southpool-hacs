@@ -7,7 +7,6 @@ https://github.com/mysteriouswolf/southpool-hacs
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
@@ -15,7 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import SouthpoolApiClient
-from .const import CONF_REGION, DOMAIN, LOGGER, UPDATE_INTERVAL_MINUTES
+from .const import CONF_REGION, DOMAIN, LOGGER
 from .coordinator import SouthpoolDataUpdateCoordinator
 from .data import SouthpoolData
 
@@ -43,7 +42,6 @@ async def async_setup_entry(
         hass=hass,
         logger=LOGGER,
         name=DOMAIN,
-        update_interval=timedelta(minutes=UPDATE_INTERVAL_MINUTES),
         api_client=api_client,
     )
     entry.runtime_data = SouthpoolData(

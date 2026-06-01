@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import UnitOfPower
 
-from .const import CET_TZ, MINUTES_PER_QUARTER_HOUR
 from .entity import SouthpoolEntity
 
 if TYPE_CHECKING:
@@ -149,7 +148,7 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
         self._attr_name = f"Southpool {region} {entity_description.name}"
 
     @property
-    def native_value(self) -> str | int | float | None:
+    def native_value(self) -> str | int | float | datetime | None:
         """Return the current native value of the sensor."""
         if not self.coordinator.data:
             return None
@@ -167,120 +166,70 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
 
         return self._get_regular_value(current_values, key_suffix)
 
-    def _get_timestamp_value(self, current_values: dict) -> datetime | None:
-        """Get timestamp value from delivery day and interval value."""
-        delivery_day = current_values.get("delivery_day", "")
-
-        if self._is_hourly:
-            interval_value = current_values.get("hour", "")
-        else:
-            interval_value = current_values.get("quarter_hour", "")
-
-        if not delivery_day or not interval_value:
-            return None
-
-        try:
-            # Parse delivery day as CET (always assume CET format)
-            base_date = datetime.fromisoformat(delivery_day[:10]).replace(tzinfo=CET_TZ)
-
-            if self._is_hourly:
-                # For hourly data, hour is the actual hour (1-24, convert to 0-based)
-                hour_offset = int(interval_value) - 1
-                return base_date + timedelta(hours=hour_offset)
-            # Calculate minutes from quarter hour (1-based, 15-minute intervals)
-            minutes_offset = (int(interval_value) - 1) * MINUTES_PER_QUARTER_HOUR
-            return base_date + timedelta(minutes=minutes_offset)
-        except (ValueError, TypeError):
-            return None
+    @staticmethod
+    def _get_timestamp_value(current_values: dict[str, Any]) -> datetime | None:
+        """Return the UTC period-start datetime from the current values."""
+        period_start = current_values.get("period_start")
+        if isinstance(period_start, datetime):
+            return period_start
+        # Fall back to parsing the ISO string if the datetime object was lost
+        # somewhere along the way (e.g., serialised through HA storage).
+        iso = current_values.get("timestamp")
+        if iso:
+            try:
+                return datetime.fromisoformat(iso)
+            except ValueError, TypeError:
+                return None
+        return None
 
     def _get_regular_value(
-        self, current_values: dict, key_suffix: str
+        self, current_values: dict[str, Any], key_suffix: str
     ) -> str | int | float | None:
         """Get regular value with appropriate type conversion."""
         if key_suffix not in current_values:
             return None
 
         value = current_values[key_suffix]
-        if not value:
+        if value in (None, ""):
             return None
 
         # Convert numeric values for appropriate sensors
-        if key_suffix in ["quarter_hour", "hour"]:
+        if key_suffix in ("quarter_hour", "hour"):
             return self._convert_to_int(value)
-        if key_suffix in [
-            "price",
-            "traded_volume",
-            "baseload_price",
-        ]:
+        if key_suffix in ("price", "traded_volume", "baseload_price"):
             return self._convert_to_float(value)
         return value
 
-    def _convert_to_int(self, value: str) -> int | None:
+    @staticmethod
+    def _convert_to_int(value: Any) -> int | None:
         """Convert value to int, return None on error."""
         try:
             return int(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
-    def _convert_to_float(self, value: str) -> float | None:
+    @staticmethod
+    def _convert_to_float(value: Any) -> float | None:
         """Convert value to float, return None on error."""
         try:
             return float(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
-    def _build_timestamp_forecast(self, forecast_data: dict) -> list[str]:
-        """Build timestamp forecast list."""
-        delivery_days = forecast_data.get("delivery_day", [])
-        interval_values = (
-            forecast_data.get("hour", [])
-            if self._is_hourly
-            else forecast_data.get("quarter_hour", [])
-        )
-
-        timestamp_list = []
-        for delivery_day, interval_value in zip(
-            delivery_days, interval_values, strict=False
-        ):
-            if delivery_day and interval_value:
-                try:
-                    base_date = datetime.fromisoformat(delivery_day[:10]).replace(
-                        tzinfo=CET_TZ
-                    )
-                    if self._is_hourly:
-                        hour_offset = int(interval_value) - 1
-                        timestamp = base_date + timedelta(hours=hour_offset)
-                    else:
-                        minutes_offset = (
-                            int(interval_value) - 1
-                        ) * MINUTES_PER_QUARTER_HOUR
-                        timestamp = base_date + timedelta(minutes=minutes_offset)
-                    timestamp_list.append(timestamp.isoformat())
-                except (ValueError, TypeError):
-                    timestamp_list.append("")
-            else:
-                timestamp_list.append(None)
-
-        return timestamp_list
-
-    def _convert_forecast_values(self, forecast_list: list, key_suffix: str) -> list:
+    def _convert_forecast_values(
+        self, forecast_list: list[Any], key_suffix: str
+    ) -> list[Any]:
         """Convert forecast values to appropriate types."""
-        if key_suffix in ["quarter_hour", "hour"]:
-            return [int(v) if v and str(v).isdigit() else v for v in forecast_list]
+        if key_suffix in ("quarter_hour", "hour"):
+            return [self._convert_to_int(v) for v in forecast_list]
 
-        if key_suffix in ["price", "traded_volume", "baseload_price"]:
-            converted_list = []
-            for v in forecast_list:
-                try:
-                    converted_list.append(float(v) if v else None)
-                except (ValueError, TypeError):
-                    converted_list.append(None)
-            return converted_list
+        if key_suffix in ("price", "traded_volume", "baseload_price"):
+            return [self._convert_to_float(v) for v in forecast_list]
 
         return forecast_list
 
     @property
-    def extra_state_attributes(self) -> dict[str, any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes with 48h forecast."""
         if not self.coordinator.data:
             return {}
@@ -293,13 +242,13 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
             forecast_data = self.coordinator.data.get("forecast_48h_15min", {})
             key_suffix = self.entity_description.key
 
-        attributes = {
+        attributes: dict[str, Any] = {
             "region": self._region,
             "last_update": self.coordinator.data.get("last_update"),
         }
 
         if key_suffix == "timestamp":
-            timestamp_list = self._build_timestamp_forecast(forecast_data)
+            timestamp_list = list(forecast_data.get("timestamp", []))
             attributes["forecast_48h"] = timestamp_list
             attributes["forecast_count"] = len(timestamp_list)
         elif key_suffix in forecast_data:

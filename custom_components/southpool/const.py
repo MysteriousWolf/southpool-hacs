@@ -5,8 +5,8 @@ This module contains all shared constants used throughout the integration to
 ensure consistency and avoid duplication of magic numbers and strings.
 """
 
-from datetime import timedelta, timezone
 from logging import Logger, getLogger
+from zoneinfo import ZoneInfo
 
 LOGGER: Logger = getLogger(__package__)
 
@@ -16,8 +16,15 @@ ATTRIBUTION = "Data provided by Southpool (labs.hupx.hu)"
 CONF_REGION = "region"
 
 # Timezone handling
-# CET timezone constant - always UTC+1 (literal CET)
-CET_TZ = timezone(timedelta(hours=1))
+# The HUPX/Southpool API delivers data with "Delivery day" and "Hour" /
+# "Quarter hour" fields expressed in local Central European time
+# (CET in winter, CEST in summer). To avoid DST off-by-one bugs, every CSV
+# record is converted to a UTC start datetime at fetch time (see api.py) and
+# all internal lookups operate in UTC. SOURCE_TZ is the timezone used to
+# interpret the raw "Delivery day" date plus the hour/quarter-hour offset.
+SOURCE_TZ = ZoneInfo("Europe/Budapest")
+# Kept as an alias for backwards compatibility with existing imports.
+CET_TZ = SOURCE_TZ
 
 # Available regions for Southpool power grid
 REGIONS = [
@@ -38,7 +45,6 @@ API_ENDPOINT_15MIN = f"{API_BASE_URL}/dam_aggregated_trading_data_15min/csv"
 API_ENDPOINT_HOURLY = f"{API_BASE_URL}/dam_aggregated_trading_data/csv"
 
 # Update intervals
-UPDATE_INTERVAL_MINUTES = 15
 API_FETCH_INTERVAL_HOURS = 1
 
 # Time calculation constants
