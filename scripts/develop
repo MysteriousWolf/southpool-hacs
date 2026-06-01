@@ -4,17 +4,20 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Kill any existing Home Assistant using our config dir
+pkill -f "hass --config ${PWD}/config" 2>/dev/null || true
+
 # Create config dir if not present
 if [[ ! -d "${PWD}/config" ]]; then
     mkdir -p "${PWD}/config"
     hass --config "${PWD}/config" --script ensure_config
 fi
 
-# Set the path to custom_components
+# Set the path so HA can discover custom_components as a package
 ## This let's us have the structure we want <root>/custom_components/southpool
 ## while at the same time have Home Assistant configuration inside <root>/config
 ## without resulting to symlinks.
-export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
+export PYTHONPATH="${PYTHONPATH}:${PWD}"
 
 # Start Home Assistant
 hass --config "${PWD}/config" --debug

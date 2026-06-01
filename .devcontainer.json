@@ -1,8 +1,7 @@
 {
     "name": "mysteriouswolf/southpool_hacs",
-    "image": "mcr.microsoft.com/devcontainers/python:3.13",
-    "postCreateCommand": "scripts/setup",
-    "runArgs": ["-p", "8123:8123"],
+    "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg libturbojpeg0 libpcap-dev && scripts/setup",
     "forwardPorts": [8123],
     "portsAttributes": {
         "8123": {
@@ -35,10 +34,5 @@
             }
         }
     },
-    "remoteUser": "vscode",
-    "features": {
-        "ghcr.io/devcontainers-extra/features/apt-packages:1": {
-            "packages": "ffmpeg,libturbojpeg0,libpcap-dev"
-        }
-    }
+    "remoteUser": "vscode"
 }

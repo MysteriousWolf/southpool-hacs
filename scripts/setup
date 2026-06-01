@@ -1,7 +1,41 @@
 #!/usr/bin/env bash
-
 set -e
-
 cd "$(dirname "$0")/.."
 
-python3 -m pip install --requirement requirements.txt
+# Kill any existing Home Assistant using our config dir
+pkill -f "hass --config ${PWD}/config" 2>/dev/null || true
+
+# Install project requirements
+python3 -m pip install --upgrade --requirement requirements.txt
+
+# Install optional zlib acceleration for aiohttp performance
+python3 -m pip install --upgrade zlib-ng isal
+
+# Pre-create the config dir so the mount is ready
+mkdir -p "${PWD}/config"
+if [[ ! -f "${PWD}/config/configuration.yaml" ]]; then
+    touch "${PWD}/config/configuration.yaml"
+fi
+
+# Symlink custom_components into the config directory so HA can find it
+# without needing PYTHONPATH (e.g. when running in a devcontainer)
+if [[ ! -L "${PWD}/config/custom_components" ]]; then
+    ln -sf "${PWD}/custom_components" "${PWD}/config/custom_components"
+fi
+# The develop script also sets PYTHONPATH as a fallback
+
+# Install go2rtc binary for WebRTC support (required by HA default_config)
+GO2RTC_VERSION="1.9.14"
+case "$(uname -m)" in
+    aarch64) GO2RTC_ARCH="arm64"  ;;
+    x86_64)  GO2RTC_ARCH="amd64"  ;;
+    armv7l)  GO2RTC_ARCH="arm"    ;;
+    *)       echo "Unknown arch $(uname -m), skipping go2rtc"; exit 0 ;;
+esac
+if [ ! -f /usr/local/bin/go2rtc ]; then
+    echo "Downloading go2rtc ${GO2RTC_VERSION} (linux/${GO2RTC_ARCH})..."
+    wget -q -O /tmp/go2rtc \
+        "https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_${GO2RTC_ARCH}"
+    sudo mv /tmp/go2rtc /usr/local/bin/go2rtc
+    sudo chmod +x /usr/local/bin/go2rtc
+fi

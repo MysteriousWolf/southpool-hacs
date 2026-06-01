@@ -2,28 +2,100 @@
     {
         "label": "Setup",
         "command": "./scripts/setup",
+        "cwd": "$ZED_WORKTREE_ROOT",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
         "reveal": "always",
         "hide": "on_success",
+        "save": "none",
+        "show_summary": true,
+        "show_command": true,
         "tags": ["setup"]
     },
     {
         "label": "Lint",
         "command": "./scripts/lint",
+        "cwd": "$ZED_WORKTREE_ROOT",
         "use_new_terminal": false,
         "allow_concurrent_runs": false,
         "reveal": "always",
         "hide": "on_success",
-        "tags": ["lint"]
+        "save": "all",
+        "show_summary": true,
+        "show_command": true,
+        "tags": ["lint", "bash-script"]
     },
     {
         "label": "Develop",
         "command": "./scripts/develop",
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "env": {
+            "PYTHONPATH": "${ZED_WORKTREE_ROOT}/custom_components"
+        },
         "use_new_terminal": true,
         "allow_concurrent_runs": false,
         "reveal": "always",
         "hide": "never",
-        "tags": ["dev"]
+        "save": "none",
+        "show_summary": true,
+        "show_command": true,
+        "tags": ["dev", "bash-script"]
+    },
+    {
+        "label": "Stop",
+        "command": "pkill -f \"hass --config ${ZED_WORKTREE_ROOT}/config\"",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": true,
+        "reveal": "no_focus",
+        "hide": "on_success",
+        "save": "none",
+        "show_summary": true,
+        "show_command": false,
+        "tags": ["stop"]
+    },
+    {
+        "label": "Lint: current file",
+        "command": "ruff",
+        "args": ["check", "$ZED_FILE"],
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": true,
+        "reveal": "no_focus",
+        "hide": "on_success",
+        "save": "current",
+        "show_summary": true,
+        "show_command": true,
+        "tags": ["lint", "ruff"]
+    },
+    {
+        "label": "Format: current file",
+        "command": "ruff",
+        "args": ["format", "$ZED_FILE"],
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "use_new_terminal": false,
+        "allow_concurrent_runs": true,
+        "reveal": "no_focus",
+        "hide": "on_success",
+        "save": "current",
+        "show_summary": true,
+        "show_command": true,
+        "tags": ["lint", "ruff"]
+    },
+    {
+        "label": "Python: run current file",
+        "command": "python3",
+        "args": ["$ZED_FILE"],
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "env": {
+            "PYTHONPATH": "${ZED_WORKTREE_ROOT}/custom_components"
+        },
+        "use_new_terminal": false,
+        "allow_concurrent_runs": true,
+        "reveal": "always",
+        "hide": "never",
+        "save": "current",
+        "show_summary": true,
+        "show_command": true,
+        "tags": ["python", "run"]
     }
 ]
