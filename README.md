@@ -2,6 +2,8 @@
 
 A Home Assistant custom integration that provides real-time electricity market data from the Southpool energy exchange for Hungary, Serbia, and Slovenia.
 
+![BSP SouthPool logo](https://raw.githubusercontent.com/MysteriousWolf/southpool-hacs/main/resources/logo.svg)
+
 [![HACS Custom][hacs_shield]][hacs]
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -67,9 +69,28 @@ All price sensors include 48-hour forecasts in their `forecast_48h` attribute:
 
 MIT License - See [LICENSE](LICENSE) file.
 
----
+## Data provider and terms
 
-*This integration is not affiliated with Southpool or HUPX. All data is provided by their [public APIs](https://labs.hupx.hu/). Users are responsible for compliance with data provider terms.*
+The data displayed by this integration is sourced from the public APIs of:
+
+- **BSP Energy Exchange LLC** (Slovenia) — Dunajska 156, 1000 Ljubljana, Slovenija
+- **SEEPEX** (Serbia)
+- **HUPX Hungarian Power Exchange Limited by Shares** (Hungary)
+
+The brand assets shown in this repository are the property of their respective
+rights holders and are used solely to identify the data source. See
+[`resources/README.md`](resources/README.md) for full attribution and disclaimers.
+
+The full Terms of Use of the source website (`labs.hupx.hu`) are published by
+HUPX at <https://labs.hupx.hu/about_us/website_terms>. Use of the integration
+is subject to those terms; in particular, the website and its data are
+provided for personal and non-commercial use only.
+
+This project is an independent, unofficial integration and is **not**
+affiliated with, endorsed by, or sponsored by BSP Energy Exchange LLC,
+SEEPEX, or HUPX.
+
+---
 
 [hacs]: https://hacs.xyz
 [hacs_shield]: https://img.shields.io/badge/HACS-Custom-blue.svg
