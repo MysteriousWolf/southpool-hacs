@@ -11,8 +11,15 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfPower
+from homeassistant.const import UnitOfEnergy
 
+from .const import (
+    CONF_INTERVALS,
+    CONF_REGION,
+    DEFAULT_INTERVALS,
+    INTERVAL_15MIN,
+    INTERVAL_HOURLY,
+)
 from .entity import SouthpoolEntity
 
 if TYPE_CHECKING:
@@ -22,112 +29,126 @@ if TYPE_CHECKING:
     from .coordinator import SouthpoolDataUpdateCoordinator
     from .data import SouthpoolConfigEntry
 
+_HOURLY_PREFIX = "hourly_"
+_HOURLY_PREFIX_LEN = len(_HOURLY_PREFIX)
 
-def get_entity_descriptions() -> tuple[SensorEntityDescription, ...]:
-    """Get all entity descriptions for both 15-minute and hourly intervals."""
-    # 15-minute interval descriptions (original names)
-    descriptions_15min = [
-        SensorEntityDescription(
-            key="timestamp",
-            name="Timestamp",
-            icon="mdi:clock",
-            device_class=SensorDeviceClass.TIMESTAMP,
-        ),
-        SensorEntityDescription(
-            key="quarter_hour",
-            name="Quarter Hour",
-            icon="mdi:clock-outline",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="price",
-            name="Price",
-            icon="mdi:currency-eur",
-            unit_of_measurement="EUR/MWh",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="traded_volume",
-            name="Traded Volume",
-            icon="mdi:chart-line",
-            unit_of_measurement=UnitOfPower.MEGA_WATT,
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="baseload_price",
-            name="Baseload Price",
-            icon="mdi:currency-eur",
-            unit_of_measurement="EUR/MWh",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="status",
-            name="Status",
-            icon="mdi:check-circle",
-        ),
-    ]
+SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
+    # 15-minute interval descriptions
+    SensorEntityDescription(
+        key="timestamp",
+        name="Timestamp",
+        icon="mdi:clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="quarter_hour",
+        name="Quarter Hour",
+        icon="mdi:clock-outline",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="price",
+        name="Price",
+        icon="mdi:currency-eur",
+        native_unit_of_measurement="EUR/MWh",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="traded_volume",
+        name="Traded Volume",
+        icon="mdi:chart-line",
+        native_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="baseload_price",
+        name="Baseload Price",
+        icon="mdi:currency-eur",
+        native_unit_of_measurement="EUR/MWh",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="status",
+        name="Status",
+        icon="mdi:check-circle",
+    ),
+    # Hourly interval descriptions (with "hourly_" prefix)
+    SensorEntityDescription(
+        key="hourly_timestamp",
+        name="Hourly Timestamp",
+        icon="mdi:clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="hourly_hour",
+        name="Hourly Hour",
+        icon="mdi:clock-outline",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="hourly_price",
+        name="Hourly Price",
+        icon="mdi:currency-eur",
+        native_unit_of_measurement="EUR/MWh",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="hourly_traded_volume",
+        name="Hourly Traded Volume",
+        icon="mdi:chart-line",
+        native_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="hourly_baseload_price",
+        name="Hourly Baseload Price",
+        icon="mdi:currency-eur",
+        native_unit_of_measurement="EUR/MWh",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="hourly_status",
+        name="Hourly Status",
+        icon="mdi:check-circle",
+    ),
+)
 
-    # Hourly interval descriptions (with "hourly" prefix)
-    descriptions_hourly = [
-        SensorEntityDescription(
-            key="hourly_timestamp",
-            name="Hourly Timestamp",
-            icon="mdi:clock",
-            device_class=SensorDeviceClass.TIMESTAMP,
-        ),
-        SensorEntityDescription(
-            key="hourly_hour",
-            name="Hourly Hour",
-            icon="mdi:clock-outline",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="hourly_price",
-            name="Hourly Price",
-            icon="mdi:currency-eur",
-            unit_of_measurement="EUR/MWh",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="hourly_traded_volume",
-            name="Hourly Traded Volume",
-            icon="mdi:chart-line",
-            unit_of_measurement=UnitOfPower.MEGA_WATT,
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="hourly_baseload_price",
-            name="Hourly Baseload Price",
-            icon="mdi:currency-eur",
-            unit_of_measurement="EUR/MWh",
-            state_class=SensorStateClass.MEASUREMENT,
-        ),
-        SensorEntityDescription(
-            key="hourly_status",
-            name="Hourly Status",
-            icon="mdi:check-circle",
-        ),
-    ]
-
-    return tuple(descriptions_15min + descriptions_hourly)
+# Sensor keys that hold integer values (quarter-hour or hour index)
+_INTEGER_KEYS: frozenset[str] = frozenset({"quarter_hour", "hour"})
+# Sensor keys that hold float values (price, volume)
+_FLOAT_KEYS: frozenset[str] = frozenset({"price", "traded_volume", "baseload_price"})
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
+    _hass: HomeAssistant,
     entry: SouthpoolConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
-    entity_descriptions = get_entity_descriptions()
+    enabled: list[str] = entry.options.get(
+        CONF_INTERVALS,
+        entry.data.get(CONF_INTERVALS, DEFAULT_INTERVALS),
+    )
 
     async_add_entities(
         SouthpoolSensor(
             coordinator=entry.runtime_data.coordinator,
             entity_description=entity_description,
-            region=entry.data.get("region", "Unknown"),
+            region=entry.data.get(CONF_REGION, "Unknown"),
         )
-        for entity_description in entity_descriptions
+        for entity_description in SENSOR_DESCRIPTIONS
+        if _is_sensor_enabled(entity_description, enabled)
     )
+
+
+def _is_sensor_enabled(
+    desc: SensorEntityDescription,
+    enabled: list[str],
+) -> bool:
+    """Return True if this sensor should be created based on user options."""
+    if desc.key.startswith(_HOURLY_PREFIX):
+        return INTERVAL_HOURLY in enabled
+    return INTERVAL_15MIN in enabled
 
 
 class SouthpoolSensor(SouthpoolEntity, SensorEntity):
@@ -143,38 +164,81 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description = entity_description
         self._region = region
-        self._is_hourly = entity_description.key.startswith("hourly_")
+        self._is_hourly = entity_description.key.startswith(_HOURLY_PREFIX)
         self._attr_unique_id = f"{region}_{entity_description.key}"
         self._attr_name = f"Southpool {region} {entity_description.name}"
 
+    # ------------------------------------------------------------------
+    # Helpers for resolving interval-specific data from the coordinator
+    # ------------------------------------------------------------------
+
     @property
-    def native_value(self) -> str | int | float | datetime | None:
-        """Return the current native value of the sensor."""
+    def _data_key(self) -> str:
+        """
+        Return the sensor key stripped of the ``hourly_`` prefix.
+
+        For a 15-min sensor ``price`` this is ``"price"``; for an hourly
+        sensor ``hourly_price`` this is ``"price"``.
+        """
+        key = self.entity_description.key
+        if self._is_hourly:
+            return key[_HOURLY_PREFIX_LEN:]
+        return key
+
+    def _current_values(self) -> dict[str, Any]:
+        """Return the current-values dict for this sensor's interval type."""
+        data = self.coordinator.data or {}
+        key = "current_values_hourly" if self._is_hourly else "current_values_15min"
+        return data.get(key, {})
+
+    def _forecast(self) -> dict[str, Any]:
+        """Return the forecast dict for this sensor's interval type."""
+        data = self.coordinator.data or {}
+        key = "forecast_48h_hourly" if self._is_hourly else "forecast_48h_15min"
+        return data.get(key, {})
+
+    # ------------------------------------------------------------------
+    # Coordinator update / entity lifecycle
+    # ------------------------------------------------------------------
+
+    async def async_added_to_hass(self) -> None:
+        """Process coordinator data immediately after entity is registered."""
+        await super().async_added_to_hass()
+        self._handle_coordinator_update()
+
+    def _handle_coordinator_update(self) -> None:
+        self._attr_native_value = self._compute_native_value()
+        self._attr_extra_state_attributes = self._compute_attributes()
+        super()._handle_coordinator_update()
+
+    # ------------------------------------------------------------------
+    # Native value computation
+    # ------------------------------------------------------------------
+
+    def _compute_native_value(self) -> str | int | float | datetime | None:
         if not self.coordinator.data:
             return None
 
-        # Select appropriate data source based on sensor type
-        if self._is_hourly:
-            current_values = self.coordinator.data.get("current_values_hourly", {})
-            key_suffix = self.entity_description.key[7:]  # Remove "hourly_" prefix
-        else:
-            current_values = self.coordinator.data.get("current_values_15min", {})
-            key_suffix = self.entity_description.key
+        current = self._current_values()
+        data_key = self._data_key
 
-        if key_suffix == "timestamp":
-            return self._get_timestamp_value(current_values)
+        if data_key == "timestamp":
+            return self._parse_timestamp(current)
 
-        return self._get_regular_value(current_values, key_suffix)
+        return self._coerce_value(current.get(data_key))
 
     @staticmethod
-    def _get_timestamp_value(current_values: dict[str, Any]) -> datetime | None:
-        """Return the UTC period-start datetime from the current values."""
-        period_start = current_values.get("period_start")
+    def _parse_timestamp(current: dict[str, Any]) -> datetime | None:
+        """
+        Parse a timestamp from coordinator data.
+
+        Prefers the pre-computed ``period_start`` datetime; falls back to
+        parsing the ISO string in ``timestamp``.
+        """
+        period_start = current.get("period_start")
         if isinstance(period_start, datetime):
             return period_start
-        # Fall back to parsing the ISO string if the datetime object was lost
-        # somewhere along the way (e.g., serialised through HA storage).
-        iso = current_values.get("timestamp")
+        iso = current.get("timestamp")
         if iso:
             try:
                 return datetime.fromisoformat(iso)
@@ -182,87 +246,75 @@ class SouthpoolSensor(SouthpoolEntity, SensorEntity):
                 return None
         return None
 
-    def _get_regular_value(
-        self, current_values: dict[str, Any], key_suffix: str
-    ) -> str | int | float | None:
-        """Get regular value with appropriate type conversion."""
-        if key_suffix not in current_values:
-            return None
+    # ------------------------------------------------------------------
+    # Value coercion helpers
+    # ------------------------------------------------------------------
 
-        value = current_values[key_suffix]
+    def _coerce_value(self, value: object) -> str | int | float | None:
+        """Coerce a raw value to the appropriate Python type for this sensor."""
         if value in (None, ""):
             return None
 
-        # Convert numeric values for appropriate sensors
-        if key_suffix in ("quarter_hour", "hour"):
-            return self._convert_to_int(value)
-        if key_suffix in ("price", "traded_volume", "baseload_price"):
-            return self._convert_to_float(value)
-        return value
+        data_key = self._data_key
+        if data_key in _INTEGER_KEYS:
+            return _try_int(value)
+        if data_key in _FLOAT_KEYS:
+            return _try_float(value)
+        return str(value)
 
-    @staticmethod
-    def _convert_to_int(value: Any) -> int | None:
-        """Convert value to int, return None on error."""
-        try:
-            return int(value)
-        except ValueError, TypeError:
-            return None
+    def _coerce_forecast(self, values: list[object]) -> list[object]:
+        """Coerce a list of forecast values to the appropriate Python types."""
+        data_key = self._data_key
+        if data_key in _INTEGER_KEYS:
+            return [_try_int(v) for v in values]
+        if data_key in _FLOAT_KEYS:
+            return [_try_float(v) for v in values]
+        return values
 
-    @staticmethod
-    def _convert_to_float(value: Any) -> float | None:
-        """Convert value to float, return None on error."""
-        try:
-            return float(value)
-        except ValueError, TypeError:
-            return None
+    # ------------------------------------------------------------------
+    # Extra state attributes
+    # ------------------------------------------------------------------
 
-    def _convert_forecast_values(
-        self, forecast_list: list[Any], key_suffix: str
-    ) -> list[Any]:
-        """Convert forecast values to appropriate types."""
-        if key_suffix in ("quarter_hour", "hour"):
-            return [self._convert_to_int(v) for v in forecast_list]
-
-        if key_suffix in ("price", "traded_volume", "baseload_price"):
-            return [self._convert_to_float(v) for v in forecast_list]
-
-        return forecast_list
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional state attributes with 48h forecast."""
+    def _compute_attributes(self) -> dict[str, Any]:
         if not self.coordinator.data:
             return {}
 
-        # Select appropriate forecast data based on sensor type
-        if self._is_hourly:
-            forecast_data = self.coordinator.data.get("forecast_48h_hourly", {})
-            key_suffix = self.entity_description.key[7:]  # Remove "hourly_" prefix
-        else:
-            forecast_data = self.coordinator.data.get("forecast_48h_15min", {})
-            key_suffix = self.entity_description.key
+        forecast = self._forecast()
+        data_key = self._data_key
 
         attributes: dict[str, Any] = {
             "region": self._region,
             "last_update": self.coordinator.data.get("last_update"),
         }
 
-        if key_suffix == "timestamp":
-            timestamp_list = list(forecast_data.get("timestamp", []))
-            attributes["forecast_48h"] = timestamp_list
-            attributes["forecast_count"] = len(timestamp_list)
-        elif key_suffix in forecast_data:
-            forecast_list = self._convert_forecast_values(
-                forecast_data[key_suffix], key_suffix
-            )
-            attributes["forecast_48h"] = forecast_list
-            attributes["forecast_count"] = len(forecast_list)
+        if data_key == "timestamp":
+            timestamps = list(forecast.get("timestamp", []))
+            attributes["forecast_48h"] = timestamps
+            attributes["forecast_count"] = len(timestamps)
+        elif data_key in forecast:
+            forecast_values = self._coerce_forecast(forecast[data_key])
+            attributes["forecast_48h"] = forecast_values
+            attributes["forecast_count"] = len(forecast_values)
 
         return attributes
 
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return (
-            self.coordinator.last_update_success and self.coordinator.data is not None
-        )
+
+# ------------------------------------------------------------------
+# Module-level conversion helpers
+# ------------------------------------------------------------------
+
+
+def _try_int(value: object) -> int | None:
+    """Try to convert *value* to an integer, returning None on failure."""
+    try:
+        return int(str(value))
+    except ValueError, TypeError:
+        return None
+
+
+def _try_float(value: object) -> float | None:
+    """Try to convert *value* to a float, returning None on failure."""
+    try:
+        return float(str(value))
+    except ValueError, TypeError:
+        return None

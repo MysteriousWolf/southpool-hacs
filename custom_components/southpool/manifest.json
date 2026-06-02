@@ -3,10 +3,10 @@
   "name": "Southpool Integration",
   "codeowners": ["@MysteriousWolf"],
   "config_flow": true,
-  "documentation": "https://github.com/MysteriousWolf/southpool_hacs",
+  "documentation": "https://github.com/MysteriousWolf/southpool-hacs",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/MysteriousWolf/southpool_hacs/issues",
-  "requirements": ["aiohttp", "async-timeout"],
-  "version": "0.1.2"
+  "issue_tracker": "https://github.com/MysteriousWolf/southpool-hacs/issues",
+  "requirements": [],
+  "version": "0.2.0"
 }

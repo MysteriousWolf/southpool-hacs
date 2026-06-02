@@ -2,9 +2,18 @@
     "config": {
         "step": {
             "user": {
-                "title": "Southpool",
+                "title": "Southpool Energy Exchange",
+                "description": "Configure Southpool electricity market data for your region.",
                 "data": {
-                    "region": "Region"
+                    "region": "Region",
+                    "update_interval": "Update interval",
+                    "intervals": "Sensor intervals",
+                    "dst_correction": "DST correction",
+                    "time_offset": "Time offset (hours)"
+                },
+                "data_description": {
+                    "dst_correction": "Apply daylight saving transitions (CET/CEST) when parsing timestamps. Disable for fixed UTC+1.",
+                    "time_offset": "Manual correction applied to every timestamp after timezone conversion. Range: -12 to +12 hours."
                 }
             }
         },
@@ -15,7 +24,18 @@
     "options": {
         "step": {
             "init": {
-                "title": "Southpool Options"
+                "title": "Southpool Options",
+                "description": "Configure the **{region}** region.\n\nTo change the region, remove and re-add the integration.",
+                "data": {
+                    "update_interval": "Update interval",
+                    "intervals": "Sensor intervals",
+                    "dst_correction": "DST correction",
+                    "time_offset": "Time offset (hours)"
+                },
+                "data_description": {
+                    "dst_correction": "Apply daylight saving transitions (CET/CEST) when parsing timestamps. Disable for fixed UTC+1.",
+                    "time_offset": "Manual correction applied to every timestamp after timezone conversion. Range: -12 to +12 hours."
+                }
             }
         }
     }
