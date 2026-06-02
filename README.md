@@ -15,6 +15,10 @@ A Home Assistant custom integration that provides real-time electricity market d
 - Multiple regions: Hungary (HU), Serbia (RS), Slovenia (SI)
 - Both 15-minute and hourly data intervals
 - Trading volume monitoring
+- Configurable update interval (5 / 10 / 15 / 30 / 60 minutes)
+- DST correction with optional fixed UTC+1 mode
+- Manual time offset adjustment (±12 hours)
+- Enable or disable sensor groups (15-min / hourly) per entry
 - Central European Time (CET/UTC+1)
 
 ## Installation
@@ -42,12 +46,25 @@ Each region provides both 15-minute and hourly sensors:
 |-----------|------------------|---------------|------|
 | Price | `southpool_{region}_price` | `southpool_{region}_hourly_price` | EUR/MWh |
 | Period | `southpool_{region}_quarter_hour` | `southpool_{region}_hourly_hour` | 1-96 / 1-24 |
-| Volume | `southpool_{region}_traded_volume` | `southpool_{region}_hourly_traded_volume` | MW |
+| Volume | `southpool_{region}_traded_volume` | `southpool_{region}_hourly_traded_volume` | MWh |
 | Timestamp | `southpool_{region}_timestamp` | `southpool_{region}_hourly_timestamp` | CET |
 | Baseload | `southpool_{region}_baseload_price` | `southpool_{region}_hourly_baseload_price` | EUR/MWh |
 | Status | `southpool_{region}_status` | `southpool_{region}_hourly_status` | - |
 
 *Replace `{region}` with: `hu`, `rs`, or `si`*
+
+## Configuration
+
+After adding an integration entry, you can reconfigure it via the gear icon:
+
+- **Update interval** — How often sensors refresh (5–60 minutes, default 15)
+- **Sensor intervals** — Enable or disable 15-minute and/or hourly sensor groups
+- **DST correction** — When enabled (default), timestamps respect Europe/Budapest
+  DST transitions (CET/CEST). When disabled, a fixed UTC+1 (CET) offset is used.
+- **Time offset** — Manual per-timestamp adjustment in hours (range: -12 to +12).
+  Applied after DST/timezone conversion.
+
+To change the region, remove and re-add the integration entry.
 
 ## Forecast Data
 
@@ -57,7 +74,7 @@ All price sensors include 48-hour forecasts in their `forecast_48h` attribute:
 
 ## Updates
 
-- **Sensors**: Every 15 minutes (00, 15, 30, 45)
+- **Sensors**: Every 5, 10, 15 (default), 30, or 60 minutes
 - **API Data**: Every hour
 
 ## Support
