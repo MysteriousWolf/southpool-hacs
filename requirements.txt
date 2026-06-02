@@ -1,5 +1,2 @@
-colorlog==6.10.1
-homeassistant
-pip>=26.1.2
-ruff==0.15.15
-pycares==5.0.1
+# Development dependencies only.
+# aiohttp and async-timeout are provided by Home Assistant core.
