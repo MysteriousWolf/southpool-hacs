@@ -1,0 +1,11 @@
+{
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "standard",
+  "include": ["custom_components"],
+  "extraPaths": [
+    "/home/vscode/.local/lib/python3.14/site-packages"
+  ],
+  "reportMissingImports": true,
+  "reportIncompatibleVariableOverride": false
+}

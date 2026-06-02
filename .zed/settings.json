@@ -1,0 +1,36 @@
+{
+  "lsp": {
+    "basedpyright": {
+      "settings": {
+        "python": {
+          "pythonPath": "/usr/local/bin/python3"
+        },
+        "python.analysis": {
+          "typeCheckingMode": "standard",
+          "diagnosticMode": "workspace",
+          "extraPaths": ["/home/vscode/.local/lib/python3.14/site-packages"],
+          "autoSearchPaths": true,
+          "useLibraryCodeForTypes": true,
+          "reportMissingImports": true,
+          "reportMissingTypeStubs": false,
+          "reportPrivateImportUsage": false,
+          "reportIncompatibleVariableOverride": false
+        }
+      }
+    },
+    "ruff": {
+      "settings": {
+        "args": ["--select", "ALL", "--ignore", "D203,D212"]
+      }
+    }
+  },
+  "formatter": {
+    "language_server": {
+      "name": "ruff"
+    }
+  },
+  "code_actions_on_format": {
+    "source.fixAll.ruff": true,
+    "source.organizeImports.ruff": true
+  }
+}
