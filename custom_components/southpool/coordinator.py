@@ -57,32 +57,32 @@ class SouthpoolDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> Any:
         """Update current values from cached data without API call."""
-        async with self._update_lock:
-            # If we don't have cached data, return empty structure
-            if self._cached_api_data is None:
-                self.logger.warning("No cached data available for sensor update")
-                return {
-                    "region": self.config_entry.data.get("region", "Unknown"),
-                    "data_count": 0,
-                    "records": [],
-                    "current_values": {},
-                    "forecast_48h": {},
-                    "last_update": datetime.now(UTC).isoformat(),
-                    "last_api_fetch": None,
-                }
+        # Lock is held by the caller (_schedule_quarter_hour_updates) or
+        # there is no contention (initial refresh), so we do not need one here.
+        if self._cached_api_data is None:
+            self.logger.warning("No cached data available for sensor update")
+            return {
+                "region": self.config_entry.data.get("region", "Unknown"),
+                "data_count": 0,
+                "records": [],
+                "current_values": {},
+                "forecast_48h": {},
+                "last_update": datetime.now(UTC).isoformat(),
+                "last_api_fetch": None,
+            }
 
-            # Recalculate current values from cached data
-            self.logger.debug("Updating current values from cached data")
-            result = self._update_current_values(self._cached_api_data)
+        # Recalculate current values from cached data
+        self.logger.debug("Updating current values from cached data")
+        result = self._update_current_values(self._cached_api_data)
 
-            # Log current values for debugging
-            current_values_15min = result.get("current_values_15min", {})
-            current_values_hourly = result.get("current_values_hourly", {})
-            quarter_hour = current_values_15min.get("quarter_hour", "Unknown")
-            hour = current_values_hourly.get("hour", "Unknown")
-            self.logger.debug("Current quarter hour: %s, hour: %s", quarter_hour, hour)
+        # Log current values for debugging
+        current_values_15min = result.get("current_values_15min", {})
+        current_values_hourly = result.get("current_values_hourly", {})
+        quarter_hour = current_values_15min.get("quarter_hour", "Unknown")
+        hour = current_values_hourly.get("hour", "Unknown")
+        self.logger.debug("Current quarter hour: %s, hour: %s", quarter_hour, hour)
 
-            return result
+        return result
 
     async def _fetch_api_data(self) -> Any:
         """Fetch fresh data from the API."""
