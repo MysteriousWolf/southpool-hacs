@@ -11,10 +11,19 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.loader import async_get_loaded_integration
 
 from .api import SouthpoolApiClient
-from .const import CONF_REGION, DOMAIN, LOGGER
+from .const import (
+    CONF_DST_CORRECTION,
+    CONF_REGION,
+    CONF_TIME_OFFSET,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_DST_CORRECTION,
+    DEFAULT_TIME_OFFSET,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    LOGGER,
+)
 from .coordinator import SouthpoolDataUpdateCoordinator
 from .data import SouthpoolData
 
@@ -28,29 +37,47 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-# https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SouthpoolConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
+    dst_correction = entry.options.get(
+        CONF_DST_CORRECTION,
+        entry.data.get(CONF_DST_CORRECTION, DEFAULT_DST_CORRECTION),
+    )
+    time_offset = int(
+        entry.options.get(
+            CONF_TIME_OFFSET,
+            entry.data.get(CONF_TIME_OFFSET, DEFAULT_TIME_OFFSET),
+        )
+    )
+
     api_client = SouthpoolApiClient(
         region=entry.data[CONF_REGION],
         session=async_get_clientsession(hass),
+        dst_correction=dst_correction,
+        time_offset_hours=time_offset,
     )
+
+    update_interval = int(
+        entry.options.get(
+            CONF_UPDATE_INTERVAL,
+            entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+        )
+    )
+
     coordinator = SouthpoolDataUpdateCoordinator(
         hass=hass,
         logger=LOGGER,
         name=DOMAIN,
         api_client=api_client,
+        update_interval_minutes=update_interval,
     )
     entry.runtime_data = SouthpoolData(
-        client=api_client,
-        integration=async_get_loaded_integration(hass, entry.domain),
         coordinator=coordinator,
     )
 
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -64,6 +91,7 @@ async def async_unload_entry(
     entry: SouthpoolConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
+    await entry.runtime_data.coordinator.async_shutdown()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
